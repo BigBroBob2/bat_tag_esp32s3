@@ -48,13 +48,25 @@ void sdmmc_delete() {
 
 ///////////////////// files
 
+void fs_write(char *path, const void *ptr, size_t size, size_t nmemb) {
+    FILE *f = fopen(path, "wb+");
+    fwrite(ptr,size,nmemb,f);
+    fclose(f);
+}
+
 static int trial_count = 0;
 
 //// file names
-char mic_filename[32];
-char video_filename[32];
-char imu_filename[32];
-char H_imu_filename[32];
+static char mic_filename[32];
+static char video_filename[32];
+static char imu_filename[32];
+static char H_imu_filename[32];
+
+//// FILE
+static FILE *f_mic;
+static FILE *f_video;
+static FILE *f_imu;
+static FILE *f_H_imu;
 
 void define_files() {
     // create files
@@ -80,11 +92,7 @@ void define_files() {
     fclose(f);
 }
 
-void fs_write(char *path, const void *ptr, size_t size, size_t nmemb) {
-    FILE *f = fopen(path, "wb+");
-    fwrite(ptr,size,nmemb,f);
-    fclose(f);
-}
+
 
 ////////////////////// sdcard thread
 
@@ -92,3 +100,43 @@ TaskHandle_t sdcard_thread_handle = NULL;
 SemaphoreHandle_t sdcard_thread_semaphore = NULL;
 
 void sdcard_thread(void *p);
+
+
+static esp_err_t s_example_write_file(const char *path, char *data)
+{   
+    char *TAG = "example";
+    ESP_LOGI(TAG, "Opening file %s", path);
+    FILE *f = fopen(path, "w");
+    if (f == NULL) {
+        ESP_LOGE(TAG, "Failed to open file for writing");
+        return ESP_FAIL;
+    }
+    fprintf(f, data);
+    fclose(f);
+    ESP_LOGI(TAG, "File written");
+
+    return ESP_OK;
+}
+
+static esp_err_t s_example_read_file(const char *path)
+{   
+    char *TAG = "example";
+    ESP_LOGI(TAG, "Reading file %s", path);
+    FILE *f = fopen(path, "r");
+    if (f == NULL) {
+        ESP_LOGE(TAG, "Failed to open file for reading");
+        return ESP_FAIL;
+    }
+    char line[EXAMPLE_MAX_CHAR_SIZE];
+    fgets(line, sizeof(line), f);
+    fclose(f);
+
+    // strip newline
+    char *pos = strchr(line, '\n');
+    if (pos) {
+        *pos = '\0';
+    }
+    ESP_LOGI(TAG, "Read from file: '%s'", line);
+
+    return ESP_OK;
+}
