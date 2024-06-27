@@ -98,6 +98,7 @@ void define_files() {
 
 TaskHandle_t sdcard_thread_handle = NULL;
 SemaphoreHandle_t sdcard_thread_semaphore = NULL;
+SemaphoreHandle_t sdcard_finish_semaphore = NULL;
 
 void sdcard_thread(void *p);
 
