@@ -23,7 +23,8 @@
 #include "sdcard.h"
 #endif
 
-uint8_t ones[AUDIO_BUF_BYTES];
+// bool if_first = true;
+
 
 void sdcard_thread(void *p) {
   while (1) {
@@ -32,7 +33,8 @@ void sdcard_thread(void *p) {
 
     // audio
     // fwrite(&mic_t,sizeof(uint32_t),1,f_mic);
-    fwrite(&Buffer_to_process,sizeof(uint8_t),AUDIO_BUF_BYTES,f_mic);
+    block_read_out_buf(&mic_circle_buf,mic_readout_buf,&mic_count);
+    fwrite(&mic_readout_buf,sizeof(uint8_t),mic_count*mic_block_size,f_mic);
     
     // camera
 
@@ -42,19 +44,21 @@ void sdcard_thread(void *p) {
 
     gpio_set_level(16,0);
 
-    xSemaphoreGive(sdcard_finish_semaphore);
+    // xSemaphoreGive(sdcard_finish_semaphore);
+    // portYIELD();
+
+    
   }
-  }
+}
 }
 
 void app_main(void)
 { 
-    int i = 0;
-    for (i=0;i<AUDIO_BUF_BYTES;i++) {
-      ones[i] = 1;
-    }
 
     esp_err_t ret;
+
+    trial_finish_semaphore = xSemaphoreCreateBinary();
+    answer_trial_finish_semaphore = xSemaphoreCreateBinary();
 
     gpio_set_direction(16,GPIO_MODE_OUTPUT);
     gpio_set_direction(8,GPIO_MODE_OUTPUT);
@@ -119,15 +123,34 @@ void app_main(void)
     // }
     // fclose(f);
 
+    /// need to test mic data 
+    // int i = 0;
+    // for (i=0;i<100;i++) {
+    // i2s_read(I2S_NUM_0, &PDMDataBuffer_1[0], AUDIO_BUF_BYTES, &bytes_read, portMAX_DELAY);
+    
+    // printf("%04d\n",PDMDataBuffer_1[0]);
+    //     if(bytes_read != AUDIO_BUF_BYTES) {
+    //         printf("bytes_read=%d\n",bytes_read);
+    //     }
+    // fwrite(&PDMDataBuffer_1[0],sizeof(uint16_t),AUDIO_BUF_BYTES/sizeof(uint16_t),f_mic);
+    // }
+
+    // fclose(f_mic);
+
+    // while (1) {
+    //   printf("stopped\n");
+    //   vTaskDelay(pdMS_TO_TICKS(1000));
+    // }
+
     ////////////////////// start thread
     // create sdcard thread
     sdcard_thread_semaphore = xSemaphoreCreateBinary();
     sdcard_finish_semaphore = xSemaphoreCreateBinary();
-    xTaskCreate(sdcard_thread,"sdcard_thread",2048,NULL,(1|portPRIVILEGE_BIT),&sdcard_thread_handle);
+    xTaskCreate(sdcard_thread,"sdcard_thread",2048,NULL,(4|portPRIVILEGE_BIT),&sdcard_thread_handle);
 
     // create IMU thread
     imu_thread_semaphore = xSemaphoreCreateBinary();
-    xTaskCreate(imu_thread,"imu_thread",2048,NULL,(1|portPRIVILEGE_BIT),&imu_thread_handle);
+    xTaskCreate(imu_thread,"imu_thread",2048,NULL,(4|portPRIVILEGE_BIT),&imu_thread_handle);
 
     // create IMU isr
     gpio_set_direction(IMU_PIN_INT,GPIO_MODE_INPUT);
@@ -138,15 +161,22 @@ void app_main(void)
     // create mic switch buffer thread
     mic_read_semaphore = xSemaphoreCreateBinary();
     mic_read_finish_semaphore = xSemaphoreCreateBinary();
-    xTaskCreate(mic_read_thread,"mic_read_thread",2048, NULL,(1|portPRIVILEGE_BIT),&mic_read_thread_handle);
-    xTaskCreate(mic_switchbuffer_thread,"mic_switchbuffer_thread",2048, NULL,(1|portPRIVILEGE_BIT),&mic_switchbuffer_thread_handle);
+    ESP_ERROR_CHECK(i2s_channel_enable(rx_chan));
+
+    // vTaskDelay(pdMS_TO_TICKS(1000));
+    
+    // xTaskCreate(mic_switchbuffer_thread,"mic_switchbuffer_thread",2048, NULL,(1|portPRIVILEGE_BIT),&mic_switchbuffer_thread_handle);
 
     // start mic read thread
-    // xTaskCreate(mic_read_thread,"mic_read_thread",2048, NULL,(4|portPRIVILEGE_BIT),&mic_read_thread_handle);
+    xTaskCreate(mic_read_thread,"mic_read_thread",2048, NULL,(4|portPRIVILEGE_BIT),&mic_read_thread_handle);
 
     int count = 0;
-    while (count < 10) {
-      vTaskDelay(pdMS_TO_TICKS(1000));
+    while (count < 100) {
+      vTaskDelay(pdMS_TO_TICKS(100));
+
+      xSemaphoreGive(sdcard_thread_semaphore);
+      portYIELD();
+
       count = count + 1;
 
       // xSemaphoreGive(sdcard_thread_semaphore);
@@ -155,15 +185,19 @@ void app_main(void)
     
     // printf("Recording finished!\n");
 
+    xSemaphoreGive(trial_finish_semaphore);
+    while(!xSemaphoreTake(answer_trial_finish_semaphore,1)){;}
     // stop imu and mic data reading
     gpio_uninstall_isr_service();
-    i2s_stop(I2S_NUM_0);
+    i2s_delete();
+
+    printf("Trial %03d finished!!\n",trial_count);
 
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     vTaskDelete(imu_thread_handle);
     vTaskDelete(mic_read_thread_handle);
-    vTaskDelete(mic_switchbuffer_thread_handle);
+    // vTaskDelete(mic_switchbuffer_thread_handle);
     // vTaskDelete(sdcard_thread_handle);
 
     // vSemaphoreDelete(imu_thread_semaphore);
@@ -171,8 +205,6 @@ void app_main(void)
     // vSemaphoreDelete(sdcard_finish_semaphore);
     // vSemaphoreDelete(mic_read_finish_semaphore);
     // vSemaphoreDelete(sdcard_thread_semaphore);
-
-    i2s_delete();
 
     fclose(f_mic);
     fclose(f_video);
