@@ -65,7 +65,7 @@ void i2s_init() {
     i2s_pdm_rx_config_t pdm_rx_cfg = {
         .clk_cfg = I2S_PDM_RX_CLK_DEFAULT_CONFIG(PDM_RX_FREQ_HZ),
         /* The data bit-width of PDM mode is fixed to 16 */
-        .slot_cfg = I2S_PDM_RX_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+        .slot_cfg = I2S_PDM_RX_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_8BIT, I2S_SLOT_MODE_STEREO),
         .gpio_cfg = {
             .clk = PDM_RX_PIN_CLK,
             .dins = {
@@ -76,8 +76,8 @@ void i2s_init() {
             },
         },
     };
-    pdm_rx_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
-    pdm_rx_cfg.slot_cfg.slot_mask = I2S_PDM_RX_LINE0_SLOT_LEFT | I2S_PDM_RX_LINE0_SLOT_RIGHT;
+    // pdm_rx_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
+    // pdm_rx_cfg.slot_cfg.slot_mask = I2S_PDM_RX_LINE0_SLOT_LEFT | I2S_PDM_RX_LINE0_SLOT_RIGHT;
 
     ESP_ERROR_CHECK(i2s_channel_init_pdm_rx_mode(rx_chan, &pdm_rx_cfg));
 }
@@ -89,8 +89,8 @@ void i2s_delete() {
 // timestamp for audio double buffer switching
 static uint32_t mic_t;
 
-#define N_mic_circular_buf 4
-#define mic_block_size 8192
+#define N_mic_circular_buf 8
+#define mic_block_size 4096
 #define AUDIO_BUF_BYTES mic_block_size
 
 static char mic_cbuf[N_mic_circular_buf*mic_block_size]; 
@@ -121,11 +121,14 @@ static size_t bytes_read = 0;
 // static uint16_t* Buffer_to_process = &PDMDataBuffer_1[0];
 // static uint8_t Buffer_is_processing[mic_block_size];
 static uint8_t mic_readout_buf[N_mic_circular_buf*mic_block_size];
-static uint16_t mic_count = 0;
+static uint32_t mic_count = 0;
+
+bool set_level = 0;
 
 void mic_read_thread(void *p) {
     while (1) {  
-        if (!xSemaphoreTake(trial_finish_semaphore,1)) {
+        gpio_set_level(8,set_level);
+        set_level = !set_level;
         bytes_read = 0;
         // this should take enough long time to switch and write buffer
         // ESP_ERROR_CHECK(i2s_channel_read(rx_chan, Buffer_is_processing, AUDIO_BUF_BYTES, &bytes_read, portMAX_DELAY));
@@ -134,7 +137,7 @@ void mic_read_thread(void *p) {
         // if (1 + block_buf_length(&mic_circle_buf) > mic_circle_buf.N-1) {
         // printf("circular_buf out of range, buf_length=%d \n", block_buf_length(&mic_circle_buf));
         // }
-        ESP_ERROR_CHECK(i2s_channel_read(rx_chan, &mic_circle_buf.buf[mic_circle_buf.write_idx*mic_circle_buf.block_size], AUDIO_BUF_BYTES, &bytes_read, portMAX_DELAY));
+        i2s_channel_read(rx_chan, &mic_circle_buf.buf[mic_circle_buf.write_idx*mic_circle_buf.block_size], AUDIO_BUF_BYTES, &bytes_read, portMAX_DELAY);
         mic_circle_buf.write_idx = (mic_circle_buf.write_idx + 1) % mic_circle_buf.N;
 
         // printf("%04d\n",Buffer_is_processing[0]);
@@ -142,15 +145,6 @@ void mic_read_thread(void *p) {
         //     printf("bytes_read=%d\n",bytes_read);
         // }
 
-        }
-        else {
-        xSemaphoreGive(answer_trial_finish_semaphore);
-        portYIELD();
-
-        while (1) {
-            vTaskDelay(pdMS_TO_TICKS(1000));
-        }
-    }
     }
 }
 

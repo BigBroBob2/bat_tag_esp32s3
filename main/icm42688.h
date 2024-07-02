@@ -269,7 +269,7 @@ void ICM_readSensor() {
 }
 
 //////////////////////// circular buffer
-#define N_imu_circular_buf 2048
+#define N_imu_circular_buf 8192
 // IMU circular buffer
 static short imu_cbuf[N_imu_circular_buf]; 
 // IMU sample data circular buffer

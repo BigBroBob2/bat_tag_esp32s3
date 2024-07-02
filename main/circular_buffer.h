@@ -109,9 +109,9 @@ int block_write_in_buf(block_circular_buf *buf, uint8_t *value) {
     return 0;
 }
 
-int block_read_out_buf(block_circular_buf *buf, uint8_t *value, uint16_t *buf_l) {
+int block_read_out_buf(block_circular_buf *buf, uint8_t *value, uint32_t *buf_l) {
 	// for reading out multiple Image_binary
-    uint16_t L = (uint16_t)block_buf_length(buf);
+    uint32_t L = (uint32_t)block_buf_length(buf);
 	buf_l[0] = L;
     for (int i=0;i<L;i++) {
 		for (int j = 0;j < buf->block_size;j++) {

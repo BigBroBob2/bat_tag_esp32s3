@@ -13,6 +13,13 @@
 #include "esp_flash.h"
 #include "esp_system.h"
 
+#include <sys/stat.h>
+#include <dirent.h>
+
+#ifndef BLE_H
+#define BLE_H
+#include "bleconn.h"
+#endif
 
 #include "icm42688.h"
 
@@ -23,12 +30,15 @@
 #include "sdcard.h"
 #endif
 
+
+
 // bool if_first = true;
 
 
 void sdcard_thread(void *p) {
   while (1) {
   if (xSemaphoreTake(sdcard_thread_semaphore,1)) {
+    // if (!xSemaphoreTake(trial_finish_semaphore,1)) {
     gpio_set_level(16,1);
 
     // audio
@@ -47,25 +57,72 @@ void sdcard_thread(void *p) {
     // xSemaphoreGive(sdcard_finish_semaphore);
     // portYIELD();
 
+  //   }
+  //   else {
+  //       xSemaphoreGive(answer_trial_finish_semaphore);
+  //       portYIELD();
+
+  //       while (1) {
+  //           vTaskDelay(pdMS_TO_TICKS(1000));
+  //       }
+  //   }
     
   }
 }
 }
 
+///////////////////////////////// ble
+static bool trial_start = false;
+
+// In app_main() we call BLE_set_rcv_callback() to set up this function to be
+// called whenever we receive BLE data.
+void rcv_callback(char *str)
+{
+	printf("Received string: '%s'\n", str);
+	BLE_printf("Got string '%s' from you!!", str);
+}
+
 void app_main(void)
 { 
-
+    int count = 0;
     esp_err_t ret;
 
+    /// trial finish semaphore
     trial_finish_semaphore = xSemaphoreCreateBinary();
     answer_trial_finish_semaphore = xSemaphoreCreateBinary();
 
     gpio_set_direction(16,GPIO_MODE_OUTPUT);
     gpio_set_direction(8,GPIO_MODE_OUTPUT);
+
+    ////////////////////// init ble
+    BLE_init("BatTag-BLE-spp");
+    // BLE_set_rcv_callback(rcv_callback);
+
+    // while (1) {vTaskDelay(pdMS_TO_TICKS(1000));}
+
     ////////////////////// Init config
     // init sdcard
     sdmmc_init();
     vTaskDelay(pdMS_TO_TICKS(1000));
+
+    // set trial_count as the initial file number
+    trial_count = count_file_number();
+
+    ///// wait for ble connection
+    count = 0;
+    while (!conn_handle_subs[1]) {
+      printf("%03d, waiting for ble connection..\n", count);
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      count = count + 1;
+    }
+    printf("Trial %02d ble connected!\n", trial_count);
+    ///// wait for ble command
+    // count = 0;
+    // while (!trial_start & conn_handle_subs[1]) {
+    //   printf("%03d, Trial %02d, waiting for command..\n",count,trial_count);
+    //   vTaskDelay(pdMS_TO_TICKS(1000));
+    //   count = count + 1;
+    // }
 
     // init IMU
     ICM_SPI_config();
@@ -75,32 +132,6 @@ void app_main(void)
 
     // init microphone
     i2s_init();
-
-    /////////////////////// test sd card example
-    // First create a file.
-    const char *file_hello = MOUNT_POINT"/hello.txt";
-    char example_data[EXAMPLE_MAX_CHAR_SIZE];
-    snprintf(example_data, EXAMPLE_MAX_CHAR_SIZE, "%s %s!\n", "Hello", card->cid.name);
-    ret = s_example_write_file(file_hello, example_data);
-    if (ret != ESP_OK) {
-        return;
-    }
-
-    const char *file_foo = MOUNT_POINT"/foo.txt";
-    // Check if destination file exists before renaming
-    struct stat st;
-    if (stat(file_foo, &st) == 0) {
-        // Delete it if it exists
-        unlink(file_foo);
-    }
-
-    // Rename original file
-    printf("Renaming file %s to %s\n", file_hello, file_foo);
-    if (rename(file_hello, file_foo) != 0) {
-        return;
-    }
-
-    ret = s_example_read_file(file_foo);
 
     ////////////////////// finish testing sdcard
     define_files();
@@ -170,14 +201,16 @@ void app_main(void)
     // start mic read thread
     xTaskCreate(mic_read_thread,"mic_read_thread",2048, NULL,(4|portPRIVILEGE_BIT),&mic_read_thread_handle);
 
-    int count = 0;
-    while (count < 100) {
-      vTaskDelay(pdMS_TO_TICKS(100));
+    // count = 0;
+    while (conn_handle_subs[1]) {
+      
 
       xSemaphoreGive(sdcard_thread_semaphore);
       portYIELD();
 
-      count = count + 1;
+      vTaskDelay(pdMS_TO_TICKS(50));
+
+      // count = count + 1;
 
       // xSemaphoreGive(sdcard_thread_semaphore);
       // portYIELD();
@@ -185,18 +218,19 @@ void app_main(void)
     
     // printf("Recording finished!\n");
 
-    xSemaphoreGive(trial_finish_semaphore);
-    while(!xSemaphoreTake(answer_trial_finish_semaphore,1)){;}
+    // xSemaphoreGive(trial_finish_semaphore);
+    // while(!xSemaphoreTake(answer_trial_finish_semaphore,1)){;}
     // stop imu and mic data reading
-    gpio_uninstall_isr_service();
     i2s_delete();
-
+    gpio_uninstall_isr_service();
+    vTaskDelete(imu_thread_handle);
+    vTaskDelete(mic_read_thread_handle);
+    
     printf("Trial %03d finished!!\n",trial_count);
 
     vTaskDelay(pdMS_TO_TICKS(1000));
 
-    vTaskDelete(imu_thread_handle);
-    vTaskDelete(mic_read_thread_handle);
+    
     // vTaskDelete(mic_switchbuffer_thread_handle);
     // vTaskDelete(sdcard_thread_handle);
 

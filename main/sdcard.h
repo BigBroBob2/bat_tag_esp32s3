@@ -14,7 +14,7 @@ const char mount_point[] = MOUNT_POINT;
 
 void sdmmc_init() {
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
-        .format_if_mount_failed = true,
+        .format_if_mount_failed = false,
         .max_files = 5,
         .allocation_unit_size = 16 * 1024
     };
@@ -39,7 +39,7 @@ void sdmmc_init() {
 
     sdmmc_card_print_info(stdout, card);
 
-    ESP_ERROR_CHECK(esp_vfs_fat_sdcard_format(mount_point, card));
+    // ESP_ERROR_CHECK(esp_vfs_fat_sdcard_format(mount_point, card));
 }
 
 void sdmmc_delete() {
@@ -140,4 +140,22 @@ static esp_err_t s_example_read_file(const char *path)
     ESP_LOGI(TAG, "Read from file: '%s'", line);
 
     return ESP_OK;
+}
+
+int count_file_number() {
+    int file_number = 0;
+
+    DIR *mydir;
+    struct dirent *en;
+    
+    mydir = opendir(mount_point);
+
+    while((en = readdir(mydir)) != NULL) {
+        file_number = file_number + 1;
+    }
+    closedir(mydir);
+
+    printf("Found %d files in SD card!\n",file_number);
+    
+    return file_number;
 }
