@@ -59,11 +59,11 @@
 ////////////////////////// config
 
 // full-scale range of accel and gyro sensors
-const int8_t ICM_AccelRange_idx = 0; // choose 0=+-16G, 1=+-8g, 2=+-4g, 3=+-2g
-const int8_t ICM_GyroRange_idx = 0;  // choose 0=+-2000dps, 1=+-1000dps, 2=+-500dps, 3=+-250dps, 4=+-125dps
+static int8_t ICM_AccelRange_idx = 0; // choose 0=+-16G, 1=+-8g, 2=+-4g, 3=+-2g
+static int8_t ICM_GyroRange_idx = 0;  // choose 0=+-2000dps, 1=+-1000dps, 2=+-500dps, 3=+-250dps, 4=+-125dps
 
 // sampling rate
-const int8_t ICM_rate_idx = 6;
+static int8_t ICM_rate_idx = 6;
 
 // Return the gyro full-scale range, in Degrees per Second,
 // for each of the range selection settings.
@@ -199,6 +199,19 @@ void ICM_enableSensor() {
     uint8_t txrx_buf[2];
     txrx_buf[0] = ICM_SPI_WRITE | ICM_PWR_MGMT0;
     txrx_buf[1] = 0b00001111;
+
+    spi_transaction_t spi_trans = {
+        .tx_buffer = &txrx_buf,
+        .length = 2*8
+    };
+    spi_device_transmit(imu_device_handle,&spi_trans);
+}
+
+void ICM_disableSensor() {
+  // write to enable accel and gyro
+    uint8_t txrx_buf[2];
+    txrx_buf[0] = ICM_SPI_WRITE | ICM_PWR_MGMT0;
+    txrx_buf[1] = 0b00000000;
 
     spi_transaction_t spi_trans = {
         .tx_buffer = &txrx_buf,

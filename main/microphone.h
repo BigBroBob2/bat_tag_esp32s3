@@ -33,7 +33,7 @@ i2s_chan_handle_t rx_chan;
 
 // real CLK freq = PDM_RX_FREQ_HZ*64
 // somehow after HACKING it's PDM_RX_FREQ_HZ*32?
-#define PDM_RX_FREQ_HZ 32000
+static int PDM_RX_FREQ_HZ = 32000;
 
 #define SAMPLE_BIT_SIZE  I2S_BITS_PER_CHAN_16BIT
 // #define BYTES_PER_SAMPLE 4
@@ -82,9 +82,9 @@ void i2s_init() {
     ESP_ERROR_CHECK(i2s_channel_init_pdm_rx_mode(rx_chan, &pdm_rx_cfg));
 }
 
-void i2s_delete() {
-    i2s_channel_disable(rx_chan);
-}
+// void i2s_disable() {
+//     i2s_channel_disable(rx_chan);
+// }
 
 // timestamp for audio double buffer switching
 static uint32_t mic_t;

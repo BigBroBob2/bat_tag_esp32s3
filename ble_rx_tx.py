@@ -136,7 +136,28 @@ while KeepGoing:
 	# =========================================================
 	# This inner loop continues as long as we are connected.
 	#
-	print("\nPress ESC or 'q' to stop the loop, 'w' to write string, <>,. to send param commands\n")
+	print("\nPress ESC or 'q' to stop the loop, 'w' to write string, or send param commands:\n")
+	print("'x' *start")
+	print("'y' *stop")
+	print("'I' *setp enable_imu 1")
+	print("'i' *setp enable_imu 0")
+	print("'H' *setp enable_H_imu 1")
+	print("'h' *setp enable_H_imu 0")
+	print("'M' *setp enable_mic 1")
+	print("'m' *setp enable_mic 0")
+	print("'C' *setp enable_cam 1")
+	print("'c' *setp enable_cam 0")
+	print("'0' *setp imu_fs 1000")
+	print("'1' *setp imu_fs 500")
+	print("'2' *setp imu_fs 200")
+	print("'3' *setp imu_fs 100")
+	print("'4' *setp mic_fs 4000000")
+	print("'5' *setp mic_fs 2000000")
+	print("'6' *setp mic_fs 1000000")
+	print("'7' *setp mic_fs 500000")
+	print("'8' *setp cam_fs 20")
+	print("'9' *setp cam_fs 10")
+
 	while periph.is_connected():
 		time.sleep(0.2)
 		if not msvcrt.kbhit():
@@ -156,41 +177,99 @@ while KeepGoing:
 			print("Disconnecting and reconnecting...")
 			break
 
-		elif ch == 'w':
-			print(" -- Writing a string to the peripheral...")
-			# write expects a Byte array, so we must "encode()" the string.
-			periph.write_command(SERVICE, CHAR_periph_RX, f"String CMD from Central! {countup}".encode())
-			#periph.write_request(SERVICE, CHAR_periph_RX, f"String from Central! {countup}".encode())
-			countup += 1
+		# elif ch == 'w':
+		# 	print(" -- Writing a string to the peripheral...")
+		# 	# write expects a Byte array, so we must "encode()" the string.
+		# 	periph.write_command(SERVICE, CHAR_periph_RX, f"String CMD from Central! {countup}".encode())
+		# 	#periph.write_request(SERVICE, CHAR_periph_RX, f"String from Central! {countup}".encode())
+		# 	countup += 1
 
-		elif ch == 'W':
-			print(" -- Writing a string to the peripheral...")
-			# write expects a Byte array, so we must "encode()" the string.
-			#periph.write_command(SERVICE, CHAR_periph_RX, f"String from Central! {countup}".encode())
-			periph.write_request(SERVICE, CHAR_periph_RX, f"String REQ from Central! {countup}".encode())
-			countup += 1
+		# elif ch == 'W':
+		# 	print(" -- Writing a string to the peripheral...")
+		# 	# write expects a Byte array, so we must "encode()" the string.
+		# 	#periph.write_command(SERVICE, CHAR_periph_RX, f"String from Central! {countup}".encode())
+		# 	periph.write_request(SERVICE, CHAR_periph_RX, f"String REQ from Central! {countup}".encode())
+		# 	countup += 1
 
 		# Some demo commands to set "parameters" in the peripheral.
 
-		elif ch == '>':
-			param2 += 20
-			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp2 {param2}".encode())
+		# elif ch == '>':
+		# 	param2 += 20
+		# 	periph.write_command(SERVICE, CHAR_periph_RX, f"*setp2 {param2}".encode())
 
-		elif ch == '<':
-			param2 -= 20
-			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp2 {param2}".encode())
+		# elif ch == '<':
+		# 	param2 -= 20
+		# 	periph.write_command(SERVICE, CHAR_periph_RX, f"*setp2 {param2}".encode())
 
-		elif ch == '.':
-			param1 += 1
-			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp1 {param1}".encode())
+		# elif ch == '.':
+		# 	param1 += 1
+		# 	periph.write_command(SERVICE, CHAR_periph_RX, f"*setp1 {param1}".encode())
 
-		elif ch == ',':
-			param1 -= 1
-			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp1 {param1}".encode())
+		# elif ch == ',':
+		# 	param1 -= 1
+		# 	periph.write_command(SERVICE, CHAR_periph_RX, f"*setp1 {param1}".encode())
 
-		elif ch == 'b':
-			# Change both parameters at once.
-			periph.write_command(SERVICE, CHAR_periph_RX, f"*setboth 987 654 12.34".encode())
+		# elif ch == 'b':
+		# 	# Change both parameters at once.
+		# 	periph.write_command(SERVICE, CHAR_periph_RX, f"*setboth 987 654 12.34".encode())
+
+		#### enable/disable IMU
+		elif ch == 'I':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp enable_imu 1".encode())
+		elif ch == 'i':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp enable_imu 0".encode())
+		
+		#### enable/disable head IMU
+		elif ch == 'H':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp enable_H_imu 1".encode())
+		elif ch == 'h':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp enable_H_imu 0".encode())
+
+		#### enable/disable microphone
+		elif ch == 'M':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp enable_mic 1".encode())
+		elif ch == 'm':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp enable_mic 0".encode())
+
+		#### enable/disable camera
+		elif ch == 'C':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp enable_cam 1".encode())
+		elif ch == 'c':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp enable_cam 0".encode())
+
+		#### trial start/stop
+		elif ch == 'x':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*start".encode())
+		elif ch == 'y':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*stop".encode())
+
+		#### change imu rate
+		elif ch == '0':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp imu_fs 1000".encode())
+		elif ch == '1':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp imu_fs 500".encode())
+		elif ch == '2':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp imu_fs 200".encode())
+		elif ch == '3':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp imu_fs 100".encode())
+
+		#### change mic rate
+		elif ch == '4':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp mic_fs 4000000".encode())
+		elif ch == '5':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp mic_fs 2000000".encode())
+		elif ch == '6':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp mic_fs 1000000".encode())
+		elif ch == '7':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp mic_fs 500000".encode())
+
+		#### change cam rate
+		elif ch == '8':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp cam_fs 20".encode())
+		elif ch == '9':
+			periph.write_command(SERVICE, CHAR_periph_RX, f"*setp cam_fs 10".encode())
+
+		
 
 	# Flush out any extra key presses.
 	# while msvcrt.kbhit():
