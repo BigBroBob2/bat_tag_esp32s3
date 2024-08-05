@@ -42,7 +42,6 @@ void sdcard_thread(void *p) {
   while (1) {
   if (xSemaphoreTake(sdcard_thread_semaphore,1)) {
     // if (!xSemaphoreTake(trial_finish_semaphore,1)) {
-    gpio_set_level(16,1);
 
     // audio
     // fwrite(&mic_t,sizeof(uint32_t),1,f_mic);
@@ -54,8 +53,10 @@ void sdcard_thread(void *p) {
     // IMU
     read_out_buf(&imu_circle_buf,imu_buf,&ICM_count);
     fwrite(&imu_buf,sizeof(short),ICM_count,f_imu);
-
-    gpio_set_level(16,0);
+    // printf("ICM_count=%d\n",ICM_count);
+    // H_IMU
+    read_out_buf(&H_imu_circle_buf,H_imu_buf,&H_ICM_count);
+    fwrite(&H_imu_buf,sizeof(short),H_ICM_count,f_H_imu);
 
     // xSemaphoreGive(sdcard_finish_semaphore);
     // portYIELD();
@@ -146,8 +147,8 @@ void rcv_callback(char *cmdstr)
 				else if (value==100) {ICM_rate_idx=8;}
 				else if (value==500) {ICM_rate_idx=15;}
 				else {
-					BLE_printf("Invalid imu_fs value, set default value 1000 Hz");
-					ICM_rate_idx=6;
+					BLE_printf("Invalid imu_fs value, set default value 100 Hz");
+					ICM_rate_idx=8;
 				}
 			}
 			else if (strcmp(var, "mic_fs") == 0) {
@@ -156,8 +157,8 @@ void rcv_callback(char *cmdstr)
 				else if (value==1000000) {PDM_RX_FREQ_HZ=32000;}
 				else if (value== 500000) {PDM_RX_FREQ_HZ=16000;}
 				else {
-					BLE_printf("Invalid mic_fs value, set default value 1000000 Hz");
-					PDM_RX_FREQ_HZ=32000;
+					BLE_printf("Invalid mic_fs value, set default value 500000 Hz");
+					PDM_RX_FREQ_HZ=16000;
 				}
 			}
 			else if (strcmp(var, "cam_fs") == 0) {
@@ -229,8 +230,8 @@ void app_main(void)
     trial_finish_semaphore = xSemaphoreCreateBinary();
     answer_trial_finish_semaphore = xSemaphoreCreateBinary();
 
-    gpio_set_direction(16,GPIO_MODE_OUTPUT);
-    gpio_set_direction(8,GPIO_MODE_OUTPUT);
+    // debug pin
+    // gpio_set_direction(16,GPIO_MODE_OUTPUT);
 
     ////////////////////// init ble
     BLE_init("BatTag-BLE-spp");
@@ -264,19 +265,7 @@ void app_main(void)
 
     // while loop for multiple trials within one connection
     while (conn_handle_subs[1]) {
-
-    //// always reset circular buffer before next trial and reset sample idx count
-    {
-      imu_circle_buf.read_idx = 0;
-      imu_circle_buf.write_idx = 0;
-      IMU_data[8] = 0;
-
-      mic_circle_buf.read_idx = 0;
-      mic_circle_buf.write_idx = 0;
-    }
-
-
-    
+      
     ///// wait for ble command to config and start
     count = 0;
     while (!trial_start && conn_handle_subs[1]) {
@@ -292,12 +281,32 @@ void app_main(void)
 
     printf("Trial %02d started recording!\n", trial_count);
 
+    //// always reset circular buffer before next trial and reset sample idx count
+    {
+      imu_circle_buf.read_idx = 0;
+      imu_circle_buf.write_idx = 0;
+      IMU_data[8] = 0;
+
+      H_imu_circle_buf.read_idx = 0;
+      H_imu_circle_buf.write_idx = 0;
+      H_IMU_data[8] = 0;
+
+      mic_circle_buf.read_idx = 0;
+      mic_circle_buf.write_idx = 0;
+    }
+
     // init IMU
     if (enable_imu) {
-      
       ICM_configSensor();
       ICM_enableINT();
       ICM_enableSensor();
+    }
+
+    // init H_IMU
+    if (enable_H_imu) {
+      H_ICM_configSensor();
+      H_ICM_enableINT();
+      H_ICM_enableSensor();
     }
 
     // init microphone
@@ -318,11 +327,9 @@ void app_main(void)
     // data[0] = 5;
     // FILE *f = fopen(imu_filename, "wb+");
     // while (1) {
-    //   gpio_set_level(16,1);
     //   // fs_write(imu_filename, &data,sizeof(short),1);
     //   fwrite(&data,sizeof(short),1,f);
 
-    //   gpio_set_level(16,0);
     // }
     // fclose(f);
 
@@ -349,18 +356,31 @@ void app_main(void)
     // create sdcard thread
     sdcard_thread_semaphore = xSemaphoreCreateBinary();
     sdcard_finish_semaphore = xSemaphoreCreateBinary();
-    xTaskCreate(sdcard_thread,"sdcard_thread",2048,NULL,(4|portPRIVILEGE_BIT),&sdcard_thread_handle);
+    xTaskCreate(sdcard_thread,"sdcard_thread",4096,NULL,((configMAX_PRIORITIES-1)|portPRIVILEGE_BIT),&sdcard_thread_handle);
 
+    gpio_install_isr_service(0);
     // create IMU thread
     imu_thread_semaphore = xSemaphoreCreateBinary();
     if (enable_imu) {
-      xTaskCreate(imu_thread,"imu_thread",2048,NULL,(4|portPRIVILEGE_BIT),&imu_thread_handle);
+      xTaskCreate(imu_thread,"imu_thread",2048,NULL,((configMAX_PRIORITIES-1)|portPRIVILEGE_BIT),&imu_thread_handle);
 
       // create IMU isr
+      gpio_reset_pin(IMU_PIN_INT);
       gpio_set_direction(IMU_PIN_INT,GPIO_MODE_INPUT);
       gpio_set_intr_type(IMU_PIN_INT,GPIO_INTR_POSEDGE);
-      gpio_install_isr_service(0);
       gpio_isr_handler_add(IMU_PIN_INT,imu_isr_handler,NULL);
+    }
+
+    // create H_IMU thread
+    H_imu_thread_semaphore = xSemaphoreCreateBinary();
+    if (enable_H_imu) {
+      xTaskCreate(H_imu_thread,"H_imu_thread",2048,NULL,((configMAX_PRIORITIES-1)|portPRIVILEGE_BIT),&H_imu_thread_handle);
+
+      // create H_IMU isr
+      gpio_reset_pin(H_IMU_PIN_INT);
+      gpio_set_direction(H_IMU_PIN_INT,GPIO_MODE_INPUT);
+      gpio_set_intr_type(H_IMU_PIN_INT,GPIO_INTR_POSEDGE);
+      gpio_isr_handler_add(H_IMU_PIN_INT,H_imu_isr_handler,NULL);
     }
 
     // create mic switch buffer thread
@@ -374,7 +394,7 @@ void app_main(void)
       // xTaskCreate(mic_switchbuffer_thread,"mic_switchbuffer_thread",2048, NULL,(1|portPRIVILEGE_BIT),&mic_switchbuffer_thread_handle);
 
       // start mic read thread
-      xTaskCreate(mic_read_thread,"mic_read_thread",2048, NULL,(4|portPRIVILEGE_BIT),&mic_read_thread_handle);
+      xTaskCreate(mic_read_thread,"mic_read_thread",2048, NULL,((configMAX_PRIORITIES-1)|portPRIVILEGE_BIT),&mic_read_thread_handle);
     }
 
     // count = 0;
@@ -400,9 +420,16 @@ void app_main(void)
     if (enable_mic) {
       i2s_channel_disable(rx_chan);
     }
+
+    gpio_uninstall_isr_service();
     if (enable_imu) {
-      gpio_uninstall_isr_service();
       vTaskDelete(imu_thread_handle);
+    }
+    if (enable_H_imu) {
+      vTaskDelete(H_imu_thread_handle);
+    }
+
+    if (enable_mic) {
       vTaskDelete(mic_read_thread_handle);
     }
     
@@ -427,7 +454,9 @@ void app_main(void)
 
     if (enable_imu) {
       ICM_disableSensor();
-      // ICM_SPI_delete();
+    }
+    if (enable_H_imu) {
+      H_ICM_disableSensor();
     }
 
     printf("Trial %02d All finished!\n",trial_count);

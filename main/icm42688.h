@@ -63,7 +63,7 @@ static int8_t ICM_AccelRange_idx = 0; // choose 0=+-16G, 1=+-8g, 2=+-4g, 3=+-2g
 static int8_t ICM_GyroRange_idx = 0;  // choose 0=+-2000dps, 1=+-1000dps, 2=+-500dps, 3=+-250dps, 4=+-125dps
 
 // sampling rate
-static int8_t ICM_rate_idx = 6;
+static int8_t ICM_rate_idx = 8;
 
 // Return the gyro full-scale range, in Degrees per Second,
 // for each of the range selection settings.
@@ -140,9 +140,21 @@ spi_device_handle_t imu_device_handle = NULL;
 #define IMU_PIN_NUM_MOSI 5
 #define IMU_PIN_NUM_MISO 6
 #define IMU_PIN_NUM_CS 7
-#define IMU_PIN_INT 15
+#define IMU_PIN_INT 1
 
 short IMU_data[9] = {0};
+
+
+
+spi_device_handle_t H_imu_device_handle = NULL;
+
+#define H_IMU_PIN_NUM_SCLK 4
+#define H_IMU_PIN_NUM_MOSI 5
+#define H_IMU_PIN_NUM_MISO 6
+#define H_IMU_PIN_NUM_CS 8
+#define H_IMU_PIN_INT 2
+
+short H_IMU_data[9] = {0};
 
 //////////////////////// SPI operations
 
@@ -167,10 +179,29 @@ void ICM_SPI_config() {
         .queue_size = 2
     };
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &devcfg, &imu_device_handle));
+
+    // spi_bus_config_t H_buscfg = {
+    //     .sclk_io_num = H_IMU_PIN_NUM_SCLK,
+    //     .mosi_io_num = H_IMU_PIN_NUM_MOSI,
+    //     .miso_io_num = H_IMU_PIN_NUM_MISO,
+    //     .quadwp_io_num = -1,
+    //     .quadhd_io_num = -1,
+    //     .max_transfer_sz = 16 * sizeof(uint8_t)
+    // };
+    // ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &H_buscfg, SPI_DMA_CH_AUTO));
+
+    spi_device_interface_config_t H_devcfg = {
+        .clock_speed_hz = 24000000,
+        .mode = 0,
+        .spics_io_num = H_IMU_PIN_NUM_CS,
+        .queue_size = 2
+    };
+    ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &H_devcfg, &H_imu_device_handle));
 }
 
 void ICM_SPI_delete() {
   spi_bus_remove_device(&imu_device_handle);
+  spi_bus_remove_device(&H_imu_device_handle);
   vTaskDelay(pdMS_TO_TICKS(1000));
   spi_bus_free(SPI2_HOST);
 }
@@ -194,6 +225,25 @@ void ICM_configSensor() {
   spi_device_transmit(imu_device_handle,&spi_trans);
 }
 
+void H_ICM_configSensor() {
+  //config gyro
+  uint8_t txrx_buf[2];
+  txrx_buf[0] = ICM_SPI_WRITE | ICM_GYRO_CONFIG0;
+  txrx_buf[1] = (ICM_GyroRange_idx << 5) | ICM_rate_idx;
+
+  spi_transaction_t spi_trans = {
+      .tx_buffer = &txrx_buf,
+      .length = 2*8
+  };
+  spi_device_transmit(H_imu_device_handle,&spi_trans);
+
+  // config accel
+  txrx_buf[0] = ICM_SPI_WRITE | ICM_ACCEL_CONFIG0;
+  txrx_buf[1] = (ICM_AccelRange_idx << 5) | ICM_rate_idx;
+
+  spi_device_transmit(H_imu_device_handle,&spi_trans);
+}
+
 void ICM_enableSensor() {
   // write to enable accel and gyro
     uint8_t txrx_buf[2];
@@ -207,6 +257,19 @@ void ICM_enableSensor() {
     spi_device_transmit(imu_device_handle,&spi_trans);
 }
 
+void H_ICM_enableSensor() {
+  // write to enable accel and gyro
+    uint8_t txrx_buf[2];
+    txrx_buf[0] = ICM_SPI_WRITE | ICM_PWR_MGMT0;
+    txrx_buf[1] = 0b00001111;
+
+    spi_transaction_t spi_trans = {
+        .tx_buffer = &txrx_buf,
+        .length = 2*8
+    };
+    spi_device_transmit(H_imu_device_handle,&spi_trans);
+}
+
 void ICM_disableSensor() {
   // write to enable accel and gyro
     uint8_t txrx_buf[2];
@@ -218,6 +281,19 @@ void ICM_disableSensor() {
         .length = 2*8
     };
     spi_device_transmit(imu_device_handle,&spi_trans);
+}
+
+void H_ICM_disableSensor() {
+  // write to enable accel and gyro
+    uint8_t txrx_buf[2];
+    txrx_buf[0] = ICM_SPI_WRITE | ICM_PWR_MGMT0;
+    txrx_buf[1] = 0b00000000;
+
+    spi_transaction_t spi_trans = {
+        .tx_buffer = &txrx_buf,
+        .length = 2*8
+    };
+    spi_device_transmit(H_imu_device_handle,&spi_trans);
 }
 
 void ICM_enableINT() {
@@ -248,6 +324,36 @@ void ICM_enableINT() {
     txrx_buf[0] = ICM_SPI_WRITE | ICM_INT_SOURCE0;
     txrx_buf[1] = 0b00001000;
     spi_device_transmit(imu_device_handle,&spi_trans);
+}
+
+void H_ICM_enableINT() {
+    uint8_t txrx_buf[2];
+
+    //ICM_INT_CONFIG
+    // Bit 0 set 1: INT1-active high
+    // Bit 1 set 1: INT1-push-pull
+    // Bit 2 set 0: INT1 pulse
+    txrx_buf[0] = ICM_SPI_WRITE | ICM_INT_CONFIG;
+    txrx_buf[1] = 0b00000011;
+
+    spi_transaction_t spi_trans = {
+        .tx_buffer = &txrx_buf,
+        .length = 2*8
+    };
+    spi_device_transmit(H_imu_device_handle,&spi_trans);
+
+    //ICM_INT_CONFIG1
+    // Bit 5 set 1: Disables de-assert duration. Required if ODR ≥ 4kHz
+    // Bit 6 set 1:  Interrupt pulse duration is 8 μs. Required if ODR ≥ 4kHz,
+    txrx_buf[0] = ICM_SPI_WRITE | ICM_INT_CONFIG1;
+    txrx_buf[1] = 0b01100000;
+    spi_device_transmit(H_imu_device_handle,&spi_trans);
+
+    //ICM_INT_SOURCE0
+    // Bit 3 set 1:  UI data ready interrupt routed to INT1
+    txrx_buf[0] = ICM_SPI_WRITE | ICM_INT_SOURCE0;
+    txrx_buf[1] = 0b00001000;
+    spi_device_transmit(H_imu_device_handle,&spi_trans);
 }
 
 void ICM_readSensor() {
@@ -281,6 +387,27 @@ void ICM_readSensor() {
     IMU_data[5] = (short)((txrx_buf[11] << 8) | txrx_buf[12]);
 }
 
+void H_ICM_readSensor() {
+  // read one sample from ICM42688P
+    uint8_t txrx_buf[13];
+    txrx_buf[0] = ICM_SPI_READ | ICM_ACCEL_DATA_X1;
+
+    spi_transaction_t spi_trans = {
+        .tx_buffer = &txrx_buf,
+        .length = 13*8,
+        .rx_buffer = &txrx_buf,
+        .rxlength = 13*8
+    };
+    spi_device_transmit(H_imu_device_handle,&spi_trans);
+
+    H_IMU_data[0] = (short)((txrx_buf[1] << 8)  | txrx_buf[2]);
+    H_IMU_data[1] = (short)((txrx_buf[3] << 8)  | txrx_buf[4]);
+    H_IMU_data[2] = (short)((txrx_buf[5] << 8)  | txrx_buf[6]);
+    H_IMU_data[3] = (short)((txrx_buf[7] << 8)  | txrx_buf[8]);
+    H_IMU_data[4] = (short)((txrx_buf[9] << 8)  | txrx_buf[10]);
+    H_IMU_data[5] = (short)((txrx_buf[11] << 8) | txrx_buf[12]);
+}
+
 //////////////////////// circular buffer
 #define N_imu_circular_buf 8192
 // IMU circular buffer
@@ -289,6 +416,15 @@ static short imu_cbuf[N_imu_circular_buf];
 static circular_buf imu_circle_buf = {
     .N = N_imu_circular_buf,
     .buf = imu_cbuf,
+    .write_idx = 0,
+    .read_idx = 0
+};
+
+static short H_imu_cbuf[N_imu_circular_buf]; 
+// IMU sample data circular buffer
+static circular_buf H_imu_circle_buf = {
+    .N = N_imu_circular_buf,
+    .buf = H_imu_cbuf,
     .write_idx = 0,
     .read_idx = 0
 };
@@ -319,10 +455,41 @@ void imu_thread(void *p) {
   }
 }
 
+//////////////////////// H_IMU task, thread, semaphore
+TaskHandle_t H_imu_thread_handle = NULL;
+SemaphoreHandle_t H_imu_thread_semaphore = NULL;
+
+// timestamp for each IMU sample
+static int32_t H_imu_t;
+// IMU buffer to transfer IMU sample from circular buffer to sd card
+static short H_imu_buf[N_imu_circular_buf];
+// sample count within the buffer, be really careful with uint8_t and int8_t
+static uint16_t H_ICM_count = 0;
+
+void H_imu_thread(void *p) {
+  while (1) {
+  if (xSemaphoreTake(H_imu_thread_semaphore,1)) {
+    H_imu_t = (uint32_t)esp_timer_get_time();
+    H_ICM_readSensor();
+
+    H_IMU_data[6] = H_imu_t >> 16;
+    H_IMU_data[7] = H_imu_t & 0x0000FFFF;
+    H_IMU_data[8]++; 
+
+    write_in_buf(&H_imu_circle_buf,H_IMU_data,9);
+  }
+  }
+}
+
 /////////////////////// ISR
 
 void imu_isr_handler() {
   xSemaphoreGiveFromISR(imu_thread_semaphore,NULL);
+  portYIELD_FROM_ISR(1);
+}
+
+void H_imu_isr_handler() {
+  xSemaphoreGiveFromISR(H_imu_thread_semaphore,NULL);
   portYIELD_FROM_ISR(1);
 }
 
