@@ -379,3 +379,5 @@ void BLE_init(char *NameStr)
 
     nimble_port_freertos_init(ble_spp_server_host_task);
 }
+
+static bool trial_start = false;

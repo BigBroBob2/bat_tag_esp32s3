@@ -127,10 +127,10 @@ bool set_level = 0;
 
 void mic_read_thread(void *p) {
     while (1) {  
-        // gpio_set_level(16,set_level);
-        // set_level = !set_level;
+        gpio_set_level(15,set_level);
+        set_level = !set_level;
         
-        bytes_read = 0;
+        // bytes_read = 0;
         // this should take enough long time to switch and write buffer
         // ESP_ERROR_CHECK(i2s_channel_read(rx_chan, Buffer_is_processing, AUDIO_BUF_BYTES, &bytes_read, portMAX_DELAY));
 
@@ -145,7 +145,6 @@ void mic_read_thread(void *p) {
         // if(bytes_read != AUDIO_BUF_BYTES) {
         //     printf("bytes_read=%d\n",bytes_read);
         // }
-
     }
 }
 

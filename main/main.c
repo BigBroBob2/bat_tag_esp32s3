@@ -43,6 +43,8 @@ void sdcard_thread(void *p) {
   if (xSemaphoreTake(sdcard_thread_semaphore,1)) {
     // if (!xSemaphoreTake(trial_finish_semaphore,1)) {
 
+    gpio_set_level(16,1);
+
     // audio
     // fwrite(&mic_t,sizeof(uint32_t),1,f_mic);
     block_read_out_buf(&mic_circle_buf,mic_readout_buf,&mic_count);
@@ -60,6 +62,8 @@ void sdcard_thread(void *p) {
 
     // xSemaphoreGive(sdcard_finish_semaphore);
     // portYIELD();
+
+    gpio_set_level(16,0);
 
   //   }
   //   else {
@@ -87,8 +91,6 @@ char *my_strtok(char *str, char sep)
 	*inc = 0;    // Terminate string at sep character.
 	return str;  // Return beginning of string.
 }
-
-static bool trial_start = false;
 
 static bool enable_imu = true;
 static bool enable_H_imu = true;
@@ -231,7 +233,8 @@ void app_main(void)
     answer_trial_finish_semaphore = xSemaphoreCreateBinary();
 
     // debug pin
-    // gpio_set_direction(16,GPIO_MODE_OUTPUT);
+    gpio_set_direction(15,GPIO_MODE_OUTPUT);
+    gpio_set_direction(16,GPIO_MODE_OUTPUT);
 
     ////////////////////// init ble
     BLE_init("BatTag-BLE-spp");
@@ -282,7 +285,6 @@ void app_main(void)
     printf("Trial %02d started recording!\n", trial_count);
 
     //// always reset circular buffer before next trial and reset sample idx count
-    {
       imu_circle_buf.read_idx = 0;
       imu_circle_buf.write_idx = 0;
       IMU_data[8] = 0;
@@ -293,7 +295,6 @@ void app_main(void)
 
       mic_circle_buf.read_idx = 0;
       mic_circle_buf.write_idx = 0;
-    }
 
     // init IMU
     if (enable_imu) {
@@ -368,6 +369,7 @@ void app_main(void)
       gpio_reset_pin(IMU_PIN_INT);
       gpio_set_direction(IMU_PIN_INT,GPIO_MODE_INPUT);
       gpio_set_intr_type(IMU_PIN_INT,GPIO_INTR_POSEDGE);
+      // gpio_set_intr_type(IMU_PIN_INT,GPIO_INTR_HIGH_LEVEL);
       gpio_isr_handler_add(IMU_PIN_INT,imu_isr_handler,NULL);
     }
 
@@ -380,6 +382,7 @@ void app_main(void)
       gpio_reset_pin(H_IMU_PIN_INT);
       gpio_set_direction(H_IMU_PIN_INT,GPIO_MODE_INPUT);
       gpio_set_intr_type(H_IMU_PIN_INT,GPIO_INTR_POSEDGE);
+      // gpio_set_intr_type(H_IMU_PIN_INT,GPIO_INTR_HIGH_LEVEL);
       gpio_isr_handler_add(H_IMU_PIN_INT,H_imu_isr_handler,NULL);
     }
 
@@ -429,13 +432,15 @@ void app_main(void)
       vTaskDelete(H_imu_thread_handle);
     }
 
+    vTaskDelay(pdMS_TO_TICKS(100));
+
     if (enable_mic) {
       vTaskDelete(mic_read_thread_handle);
     }
     
     printf("Trial %03d finished recording!!\n",trial_count);
 
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    vTaskDelay(pdMS_TO_TICKS(100));
 
     
     // vTaskDelete(mic_switchbuffer_thread_handle);

@@ -23,6 +23,7 @@
 #define ICM_INT_CONFIG 20
 #define ICM_INT_SOURCE0 101
 #define ICM_INT_CONFIG1 100
+#define ICM_INT_CONFIG0 99
 
 #define ICM_GYRO_CONFIG0 79
 #define ICM_ACCEL_CONFIG0 80
@@ -324,6 +325,12 @@ void ICM_enableINT() {
     txrx_buf[0] = ICM_SPI_WRITE | ICM_INT_SOURCE0;
     txrx_buf[1] = 0b00001000;
     spi_device_transmit(imu_device_handle,&spi_trans);
+
+    //ICM_INT_CONFIG0
+    // Bit 5:4 set 11: Clear on Status Bit Read AND on Sensor Register read
+    txrx_buf[0] = ICM_SPI_WRITE | ICM_INT_CONFIG0;
+    txrx_buf[1] = 0b00110000;
+    spi_device_transmit(imu_device_handle,&spi_trans);
 }
 
 void H_ICM_enableINT() {
@@ -353,6 +360,12 @@ void H_ICM_enableINT() {
     // Bit 3 set 1:  UI data ready interrupt routed to INT1
     txrx_buf[0] = ICM_SPI_WRITE | ICM_INT_SOURCE0;
     txrx_buf[1] = 0b00001000;
+    spi_device_transmit(H_imu_device_handle,&spi_trans);
+
+    //ICM_INT_CONFIG0
+    // Bit 5:4 set 11: Clear on Status Bit Read AND on Sensor Register read
+    txrx_buf[0] = ICM_SPI_WRITE | ICM_INT_CONFIG0;
+    txrx_buf[1] = 0b00110000;
     spi_device_transmit(H_imu_device_handle,&spi_trans);
 }
 
@@ -484,11 +497,17 @@ void H_imu_thread(void *p) {
 /////////////////////// ISR
 
 void imu_isr_handler() {
+  // BaseType_t waken = pdFALSE;
+  // xSemaphoreGiveFromISR(imu_thread_semaphore,&waken);
+  // portYIELD_FROM_ISR(waken);
   xSemaphoreGiveFromISR(imu_thread_semaphore,NULL);
   portYIELD_FROM_ISR(1);
 }
 
 void H_imu_isr_handler() {
+  // BaseType_t waken = pdFALSE;
+  // xSemaphoreGiveFromISR(H_imu_thread_semaphore,&waken);
+  // portYIELD_FROM_ISR(waken);
   xSemaphoreGiveFromISR(H_imu_thread_semaphore,NULL);
   portYIELD_FROM_ISR(1);
 }
