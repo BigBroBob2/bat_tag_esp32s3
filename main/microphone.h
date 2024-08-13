@@ -89,8 +89,8 @@ void i2s_init() {
 // timestamp for audio double buffer switching
 static uint32_t mic_t;
 
-#define N_mic_circular_buf 8
-#define mic_block_size 4096
+#define N_mic_circular_buf 4
+#define mic_block_size (4096+4)
 #define AUDIO_BUF_BYTES mic_block_size
 
 static char mic_cbuf[N_mic_circular_buf*mic_block_size]; 
@@ -125,26 +125,26 @@ static uint32_t mic_count = 0;
 
 bool set_level = 0;
 
+bool mic_start = 0;
+
 void mic_read_thread(void *p) {
     while (1) {  
+        if (mic_start) {
         gpio_set_level(15,set_level);
         set_level = !set_level;
+
+        mic_t = (uint32_t)esp_timer_get_time();
+        mic_circle_buf.buf[mic_circle_buf.write_idx*mic_circle_buf.block_size] = (uint8_t)(mic_t >> 24);
+        mic_circle_buf.buf[mic_circle_buf.write_idx*mic_circle_buf.block_size+1] = (uint8_t)((mic_t & 0x00FF0000) >> 16);
+        mic_circle_buf.buf[mic_circle_buf.write_idx*mic_circle_buf.block_size+2] = (uint8_t)((mic_t & 0x0000FF00) >> 8);
+        mic_circle_buf.buf[mic_circle_buf.write_idx*mic_circle_buf.block_size+3] = (uint8_t)(mic_t & 0x000000FF);
         
-        // bytes_read = 0;
-        // this should take enough long time to switch and write buffer
-        // ESP_ERROR_CHECK(i2s_channel_read(rx_chan, Buffer_is_processing, AUDIO_BUF_BYTES, &bytes_read, portMAX_DELAY));
-
-        // i2s_read directly into mic_circular_buf
-        // if (1 + block_buf_length(&mic_circle_buf) > mic_circle_buf.N-1) {
-        // printf("circular_buf out of range, buf_length=%d \n", block_buf_length(&mic_circle_buf));
-        // }
-        i2s_channel_read(rx_chan, &mic_circle_buf.buf[mic_circle_buf.write_idx*mic_circle_buf.block_size], AUDIO_BUF_BYTES, &bytes_read, portMAX_DELAY);
+        i2s_channel_read(rx_chan, &mic_circle_buf.buf[mic_circle_buf.write_idx*mic_circle_buf.block_size+4], AUDIO_BUF_BYTES, &bytes_read, portMAX_DELAY);
         mic_circle_buf.write_idx = (mic_circle_buf.write_idx + 1) % mic_circle_buf.N;
-
-        // printf("%04d\n",Buffer_is_processing[0]);
-        // if(bytes_read != AUDIO_BUF_BYTES) {
-        //     printf("bytes_read=%d\n",bytes_read);
-        // }
+        }
+        else {
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
     }
 }
 

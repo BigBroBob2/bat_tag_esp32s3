@@ -167,19 +167,19 @@ void ICM_SPI_config() {
         .miso_io_num = IMU_PIN_NUM_MISO,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 16 * sizeof(uint8_t)
+        .max_transfer_sz = 0
     };
-    ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO));
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
     // add ICM42688P to spi bus
     // esp32s3 can do at most 80MHz, ICM-42688-P can do at most 24MHz
     spi_device_interface_config_t devcfg = {
         .clock_speed_hz = 24000000,
-        .mode = 0,
+        .mode = 3,
         .spics_io_num = IMU_PIN_NUM_CS,
         .queue_size = 2
     };
-    ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &devcfg, &imu_device_handle));
+    ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &devcfg, &imu_device_handle));
 
     // spi_bus_config_t H_buscfg = {
     //     .sclk_io_num = H_IMU_PIN_NUM_SCLK,
@@ -193,18 +193,20 @@ void ICM_SPI_config() {
 
     spi_device_interface_config_t H_devcfg = {
         .clock_speed_hz = 24000000,
-        .mode = 0,
+        .mode = 3,
         .spics_io_num = H_IMU_PIN_NUM_CS,
         .queue_size = 2
     };
-    ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &H_devcfg, &H_imu_device_handle));
+    ESP_ERROR_CHECK(spi_bus_add_device(SPI3_HOST, &H_devcfg, &H_imu_device_handle));
 }
 
 void ICM_SPI_delete() {
+  vTaskDelay(pdMS_TO_TICKS(1000));
   spi_bus_remove_device(&imu_device_handle);
+  vTaskDelay(pdMS_TO_TICKS(1000));
   spi_bus_remove_device(&H_imu_device_handle);
   vTaskDelay(pdMS_TO_TICKS(1000));
-  spi_bus_free(SPI2_HOST);
+  spi_bus_free(SPI3_HOST);
 }
 
 void ICM_configSensor() {
@@ -494,22 +496,81 @@ void H_imu_thread(void *p) {
   }
 }
 
-/////////////////////// ISR
+//////////////////////// combine IMU task
+#define IMU_BIT    0x01
+#define H_IMU_BIT    0x02
 
-void imu_isr_handler() {
-  // BaseType_t waken = pdFALSE;
-  // xSemaphoreGiveFromISR(imu_thread_semaphore,&waken);
-  // portYIELD_FROM_ISR(waken);
-  xSemaphoreGiveFromISR(imu_thread_semaphore,NULL);
-  portYIELD_FROM_ISR(1);
+TaskHandle_t combine_imu_thread_handle = NULL;
+
+void combine_imu_thread(void *p) {
+  BaseType_t xResult;
+  uint32_t ulNotifiedValue;
+  while (1) {
+
+    // gpio_set_level(16,1);
+
+    xResult = xTaskNotifyWait(pdFALSE,ULONG_MAX,&ulNotifiedValue,portMAX_DELAY);
+
+    if(xResult == pdPASS) {
+      if ((ulNotifiedValue & IMU_BIT) != 0) {
+        imu_t = (uint32_t)esp_timer_get_time();
+        ICM_readSensor();
+
+        IMU_data[6] = imu_t >> 16;
+        IMU_data[7] = imu_t & 0x0000FFFF;
+        IMU_data[8]++; 
+
+        write_in_buf(&imu_circle_buf,IMU_data,9);
+      }
+
+      if ((ulNotifiedValue & H_IMU_BIT) != 0) {
+        H_imu_t = (uint32_t)esp_timer_get_time();
+        H_ICM_readSensor();
+
+        H_IMU_data[6] = H_imu_t >> 16;
+        H_IMU_data[7] = H_imu_t & 0x0000FFFF;
+        H_IMU_data[8]++; 
+
+        write_in_buf(&H_imu_circle_buf,H_IMU_data,9);
+      }
+    }
+
+    // gpio_set_level(16,0);
+  }
 }
 
+/////////////////////// ISR
+BaseType_t imu_isr_waken = pdFALSE;
+void imu_isr_handler() {
+
+  // gpio_set_level(15,1);
+
+  // xSemaphoreGiveFromISR(imu_thread_semaphore,&waken);
+  // portYIELD_FROM_ISR(waken);
+  // xSemaphoreGiveFromISR(imu_thread_semaphore,NULL);
+  // portYIELD_FROM_ISR(1);
+  
+  xTaskNotifyFromISR(combine_imu_thread_handle,IMU_BIT,eSetBits,&imu_isr_waken);
+  portYIELD_FROM_ISR(imu_isr_waken);
+
+  // gpio_set_level(15,0);
+}
+
+BaseType_t H_imu_isr_waken = pdFALSE;
 void H_imu_isr_handler() {
-  // BaseType_t waken = pdFALSE;
+
+  // gpio_set_level(16,1);
+
+  
   // xSemaphoreGiveFromISR(H_imu_thread_semaphore,&waken);
   // portYIELD_FROM_ISR(waken);
-  xSemaphoreGiveFromISR(H_imu_thread_semaphore,NULL);
-  portYIELD_FROM_ISR(1);
+  // xSemaphoreGiveFromISR(H_imu_thread_semaphore,NULL);
+  // portYIELD_FROM_ISR(1);
+
+  xTaskNotifyFromISR(combine_imu_thread_handle,H_IMU_BIT,eSetBits,&H_imu_isr_waken);
+  portYIELD_FROM_ISR(H_imu_isr_waken);
+
+  // gpio_set_level(16,0);
 }
 
 ///////////////////////////////////////////////////////
