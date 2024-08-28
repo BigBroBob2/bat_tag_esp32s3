@@ -52,7 +52,7 @@ void sdcard_thread(void *p) {
     // if(xResult == pdPASS) {
     //   if ((ulNotifiedValue & SDCARD_BIT) != 0) {
 
-        gpio_set_level(16,1);
+        // gpio_set_level(16,1);
 
 
     // audio
@@ -72,7 +72,7 @@ void sdcard_thread(void *p) {
 
     // printf("%d,%d\n",buf_length(&imu_circle_buf),buf_length(&H_imu_circle_buf));
 
-    gpio_set_level(16,0);
+    // gpio_set_level(16,0);
       // }
     
   }
@@ -92,12 +92,12 @@ char *my_strtok(char *str, char sep)
 	return str;  // Return beginning of string.
 }
 
-static bool enable_imu = true;
-static bool enable_H_imu = true;
-static bool enable_mic = true;
-static bool enable_cam = true;
+bool enable_imu = true;
+bool enable_H_imu = true;
+bool enable_mic = true;
+bool enable_cam = true;
 
-static int cam_interval = 50;
+int cam_interval = 50;
 
 // In app_main() we call BLE_set_rcv_callback() to set up this function to be
 // called whenever we receive BLE data.
@@ -233,8 +233,8 @@ void app_main(void)
     answer_trial_finish_semaphore = xSemaphoreCreateBinary();
 
     // debug pin
-    gpio_set_direction(15,GPIO_MODE_OUTPUT);
-    gpio_set_direction(16,GPIO_MODE_OUTPUT);
+    // gpio_set_direction(15,GPIO_MODE_OUTPUT);
+    // gpio_set_direction(16,GPIO_MODE_OUTPUT);
 
     ////////////////////// init ble
     BLE_init("BatTag-BLE-spp");
@@ -251,19 +251,9 @@ void app_main(void)
     trial_count = count_file_number();
 
     // init mic i2s only once
-    i2s_init();
+    i2s_channel_init();
     // init imu spi
     ICM_SPI_config();
-    // init IMU
-    if (enable_imu) {
-      ICM_configSensor();
-      ICM_enableINT();
-    }
-    // init H_IMU
-    if (enable_H_imu) {
-      H_ICM_configSensor();
-      H_ICM_enableINT();
-    }
 
     // while loop for disconnect and reconnect
     while (1) {
@@ -315,35 +305,16 @@ void app_main(void)
     f_imu = fopen(imu_filename, "wb+");
     f_H_imu = fopen(H_imu_filename, "wb+");
 
-    // test writing into fie speed
-    // short data[1];
-    // data[0] = 5;
-    // FILE *f = fopen(imu_filename, "wb+");
-    // while (1) {
-    //   // fs_write(imu_filename, &data,sizeof(short),1);
-    //   fwrite(&data,sizeof(short),1,f);
-
-    // }
-    // fclose(f);
-
-    /// need to test mic data 
-    // int i = 0;
-    // for (i=0;i<100;i++) {
-    // i2s_read(I2S_NUM_0, &PDMDataBuffer_1[0], AUDIO_BUF_BYTES, &bytes_read, portMAX_DELAY);
-    
-    // printf("%04d\n",PDMDataBuffer_1[0]);
-    //     if(bytes_read != AUDIO_BUF_BYTES) {
-    //         printf("bytes_read=%d\n",bytes_read);
-    //     }
-    // fwrite(&PDMDataBuffer_1[0],sizeof(uint16_t),AUDIO_BUF_BYTES/sizeof(uint16_t),f_mic);
-    // }
-
-    // fclose(f_mic);
-
-    // while (1) {
-    //   printf("stopped\n");
-    //   vTaskDelay(pdMS_TO_TICKS(1000));
-    // }
+    ///////////////////////////////// init IMU
+    if (enable_imu) {
+      ICM_configSensor();
+      ICM_enableINT();
+    }
+    // init H_IMU
+    if (enable_H_imu) {
+      H_ICM_configSensor();
+      H_ICM_enableINT();
+    }
 
     ////////////////////// start thread
     // create sdcard thread
@@ -385,6 +356,8 @@ void app_main(void)
 
     // create mic switch buffer thread
     if (enable_mic) {
+      i2s_clk_init();
+
       mic_read_semaphore = xSemaphoreCreateBinary();
       mic_read_finish_semaphore = xSemaphoreCreateBinary();
       ESP_ERROR_CHECK(i2s_channel_enable(rx_chan));
@@ -407,7 +380,7 @@ void app_main(void)
       // xTaskNotify(sdcard_thread_handle,SDCARD_BIT,eSetBits);
       // portYIELD();
 
-      vTaskDelay(pdMS_TO_TICKS(10));
+      vTaskDelay(pdMS_TO_TICKS(5));
     }
     mic_start = 0;
     

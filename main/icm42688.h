@@ -60,11 +60,11 @@
 ////////////////////////// config
 
 // full-scale range of accel and gyro sensors
-static int8_t ICM_AccelRange_idx = 0; // choose 0=+-16G, 1=+-8g, 2=+-4g, 3=+-2g
-static int8_t ICM_GyroRange_idx = 0;  // choose 0=+-2000dps, 1=+-1000dps, 2=+-500dps, 3=+-250dps, 4=+-125dps
+int8_t ICM_AccelRange_idx = 0; // choose 0=+-16G, 1=+-8g, 2=+-4g, 3=+-2g
+int8_t ICM_GyroRange_idx = 0;  // choose 0=+-2000dps, 1=+-1000dps, 2=+-500dps, 3=+-250dps, 4=+-125dps
 
 // sampling rate
-static int8_t ICM_rate_idx = 8;
+int8_t ICM_rate_idx = 6;
 
 // Return the gyro full-scale range, in Degrees per Second,
 // for each of the range selection settings.

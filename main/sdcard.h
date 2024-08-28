@@ -20,7 +20,7 @@ void sdmmc_init() {
     };
 
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    host.max_freq_khz = 20000;
+    host.max_freq_khz = SDMMC_FREQ_52M;
 
     sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
     slot_config.width = 4;
@@ -28,10 +28,10 @@ void sdmmc_init() {
     // connection pin
     slot_config.clk = 11;
     slot_config.cmd = 12;
-    slot_config.d0 = 38;
-    slot_config.d1 = 39;
-    slot_config.d2 = 40;
-    slot_config.d3 = 41;
+    slot_config.d0 = 13;
+    slot_config.d1 = 14;
+    slot_config.d2 = 15;
+    slot_config.d3 = 16;
 
     slot_config.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
 

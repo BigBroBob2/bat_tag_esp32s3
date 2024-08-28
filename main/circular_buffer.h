@@ -67,7 +67,7 @@ int read_out_buf(circular_buf *buf, short *value, int *buf_l) {
 typedef struct {
     int N;
     int block_size;
-    char *buf; // actuall capacity = N-1
+    uint8_t *buf; // actuall capacity = N-1
     int write_idx; // idx to write into circular buf
     int read_idx; // idx to read out from circular buf
 } block_circular_buf;
